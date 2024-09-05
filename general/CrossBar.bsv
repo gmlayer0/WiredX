@@ -3,13 +3,14 @@ package CrossBar;
 import Vector::*;
 import GetPut::*;
 import Arbiter::*;
+import FIFO::*;
 
 // Build a crossbar between multiple master and slave.
 // Routing Policy and Arbiter Policy is flexable.
 
 // Latency is fixed for now.
 
-module mkCrossbarCore #(
+module mkCrossbarBridge #(
     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
     module #(Arbiter_IFC#(mst_num)) mkArb,
     Vector#(mst_num, Get#(data_t)) mst_if,
@@ -83,6 +84,24 @@ module mkCrossbarCore #(
         endrule
     end
 
+endmodule
+
+module mkCrossbarIntf#(
+    function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
+    module #(Arbiter_IFC#(mst_num)) mkArb
+)(
+    Tuple2#(Vector#(mst_num, Put#(data_t)), Vector#(slv_num, Get#(data_t)))
+) provisos(
+    Alias#(mst_index_t, Bit#(TLog#(mst_num))),
+    Bits#(data_t, data_size),
+    FShow#(data_t)
+);
+
+    Vector#(mst_num, FIFO#(data_t)) mst_q <- replicateM(mkFIFO);
+    Vector#(slv_num, FIFO#(data_t)) slv_q <- replicateM(mkFIFO);
+
+    mkCrossbarBridge(getRoute, mkArb, map(fifoToGet, mst_q), map(fifoToPut, slv_q));
+    return tuple2(map(fifoToPut, mst_q), map(fifoToGet, slv_q));
 endmodule
 
 endpackage : CrossBar
