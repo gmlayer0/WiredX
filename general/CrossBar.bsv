@@ -1,4 +1,4 @@
-package Crossbar;
+package CrossBar;
 
 import Vector::*;
 import GetPut::*;
@@ -11,7 +11,7 @@ import Arbiter::*;
 
 module mkCrossbarCore #(
     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-    module (Arbiter_IFC#(mst_num) arb_if) mkArb,
+    module #(Arbiter_IFC#(mst_num)) mkArb,
     Vector#(mst_num, Get#(data_t)) mst_if,
     Vector#(slv_num, Put#(data_t)) slv_if
 )(Empty) provisos(
@@ -21,26 +21,29 @@ module mkCrossbarCore #(
 );
 
     // For each master, create a decoder to determine which slave to fire on.
-    Reg#(Maybe#(Bit#(slv_num))) mst_slv_ids[valueOf(mst_num)][2];
+    Reg#(Maybe#(Bit#(slv_num))) mst_slv_dec[valueOf(mst_num)][2];
     Reg#(data_t) mst_slv_payload[valueOf(mst_num)][2];
 
     // For each slave, Create a Arbiter.
     Arbiter_IFC#(mst_num) arb[valueOf(slv_num)];
+    Vector#(slv_num, Wire#(Bit#(mst_num))) slv_grant <- replicateM(mkDWire(0));
 
-    for(Integer i = 0 ; i < valueOf(mst_num) ; i = i + 1) begin
-        mst_slv_ids[i] <- mkCReg(2, Invalid);
-        mst_slv_payload[i] <- mkCReg(2, ?);
-        rule decode_mst_target(!isValid(mst_slv_ids[i][0]));
-            let payload <- mst_if[i].get;
-            let slv_dec = getRoute(fromInteger(i), payload);
-            mst_slv_ids[i][0] <= Valid (slv_dec);
-            mst_slv_payload[i][0] <= payload;
+    for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1) begin
+        mst_slv_dec[m] <- mkCReg(2, Invalid);
+        mst_slv_payload[m] <- mkCReg(2, ?);
+        rule decode_mst_target(!isValid(mst_slv_dec[m][0]));
+            let payload <- mst_if[m].get;
+            let slv_dec = getRoute(fromInteger(m), payload);
+            mst_slv_dec[m][0] <= Valid (slv_dec);
+            mst_slv_payload[m][0] <= payload;
         endrule
 
-        rule mst_grants;
-            for(Integer s = 0 ; s < valueOf(slv_num) ; s += 1) begin
-                if(arb[s].clients[i].grant()) mst_slv_ids[i][1] <= Invalid;
+        rule mst_inner_handshake;
+            Bool handshaked = False;
+            for(Integer s = 0 ; s < valueOf(slv_num) ; s = s + 1) begin
+                handshaked = unpack(slv_grant[s][m]) || handshaked;
             end
+            if(handshaked) mst_slv_dec[m][1] <= Invalid;
         endrule
     end
 
@@ -56,18 +59,20 @@ module mkCrossbarCore #(
         // Requester
         for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1) begin
             rule req_arbiter(
-                slv_tmp[0] matches tagged Invalid &&
-                mst_slv_ids[m][1] matches tagged Valid .vec
-            ) begin
-                if(vec[s]) arb[s].clients[m].request();
-            end
+                slv_tmp[0] matches tagged Invalid &&&
+                mst_slv_dec[m][1] matches tagged Valid .vec
+            );
+                if(unpack(vec[s])) arb[s].clients[m].request();
+            endrule
         end
         
         // Arbiter grant
-        rule grant_arbiter();
-            for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1)
-                if(arb[s].clients[m].grant()) begin
-                    slv_tmp[0] <= mst_slv_payload[m][1];
+        rule grant_arbiter;
+            if(arb[s].clients[arb[s].grant_id].grant()) begin
+                Bit#(mst_num) mst_sel = 0;
+                slv_tmp[0] <= tagged Valid mst_slv_payload[arb[s].grant_id][1];
+                mst_sel[arb[s].grant_id] = 1'b1;
+                slv_grant[s] <= mst_sel;
             end
         endrule
 
@@ -80,4 +85,4 @@ module mkCrossbarCore #(
 
 endmodule
 
-endpackage : Crossbar
+endpackage : CrossBar

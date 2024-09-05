@@ -24,7 +24,7 @@ TOPFILE := tb/$(TB)TB.bsv
 # ================================================================
 # Search path for bsc for .bsv files
 
-BSC_PATH = rtl:+
+BSC_PATH = general:tilelink:+
 
 # ================================================================
 # bsc compilation flags
