@@ -9,17 +9,19 @@ import FIFO::*;
 // Routing Policy and Arbiter Policy is flexable.
 
 // Latency is fixed for now.
-
-module mkCrossbarBridge #(
+module mkCrossbarIntf#(
     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-    module #(Arbiter_IFC#(mst_num)) mkArb,
-    Vector#(mst_num, Get#(data_t)) mst_if,
-    Vector#(slv_num, Put#(data_t)) slv_if
-)(Empty) provisos(
+    module #(Arbiter_IFC#(mst_num)) mkArb
+)(
+    Tuple2#(Vector#(mst_num, Put#(data_t)), Vector#(slv_num, Get#(data_t)))
+) provisos(
     Alias#(mst_index_t, Bit#(TLog#(mst_num))),
     Bits#(data_t, data_size),
     FShow#(data_t)
 );
+    // Creating Interface vector.
+    Vector#(mst_num, Put#(data_t)) mst_intf = ?;
+    Vector#(slv_num, Get#(data_t)) slv_intf = ?;
 
     // For each master, create a decoder to determine which slave to fire on.
     Reg#(Maybe#(Bit#(slv_num))) mst_slv_dec[valueOf(mst_num)][2];
@@ -32,11 +34,22 @@ module mkCrossbarBridge #(
     for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1) begin
         mst_slv_dec[m] <- mkCReg(2, Invalid);
         mst_slv_payload[m] <- mkCReg(2, ?);
-        rule decode_mst_target(!isValid(mst_slv_dec[m][0]));
-            let payload <- mst_if[m].get;
-            let slv_dec = getRoute(fromInteger(m), payload);
-            mst_slv_dec[m][0] <= Valid (slv_dec);
-            mst_slv_payload[m][0] <= payload;
+
+        Wire#(Bool) mst_barrier <- mkWire;
+
+        mst_intf[m] = (
+        interface Put#(data_t);
+            method Action put(data_t payload);
+                let slv_dec = getRoute(fromInteger(m), payload);
+                if(mst_barrier) begin
+                    mst_slv_dec[m][0] <= Valid (slv_dec);
+                    mst_slv_payload[m][0] <= payload;
+                end
+            endmethod
+        endinterface
+        );
+        rule mst_barrier_handle(!isValid(mst_slv_dec[m][0]));
+            mst_barrier <= True;
         endrule
 
         rule mst_inner_handshake;
@@ -78,30 +91,41 @@ module mkCrossbarBridge #(
         endrule
 
         // Put to slv port
-        rule put_slave(slv_tmp[1] matches tagged Valid .payload);
-            slv_if[s].put(payload);
-            slv_tmp[1] <= Invalid;
+        Wire#(Bool) slv_barrier <- mkWire;
+        slv_intf[s] = (
+        interface Get#(data_t);
+            method ActionValue#(data_t) get();
+                let payload = slv_tmp[1];
+                if(slv_barrier) slv_tmp[1] <= Invalid;
+                return fromMaybe(unpack(?), payload);
+            endmethod
+        endinterface
+        );
+        rule slv_barrier_handler(slv_tmp[1] matches tagged Valid .payload);
+            slv_barrier <= True;
         endrule
     end
 
+    return tuple2(mst_intf, slv_intf);
+
 endmodule
 
-module mkCrossbarIntf#(
-    function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-    module #(Arbiter_IFC#(mst_num)) mkArb
-)(
-    Tuple2#(Vector#(mst_num, Put#(data_t)), Vector#(slv_num, Get#(data_t)))
-) provisos(
-    Alias#(mst_index_t, Bit#(TLog#(mst_num))),
-    Bits#(data_t, data_size),
-    FShow#(data_t)
-);
+// module mkCrossbarBridge #(
+//     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
+//     module #(Arbiter_IFC#(mst_num)) mkArb,
+//     Vector#(mst_num, Get#(data_t)) mst_if,
+//     Vector#(slv_num, Put#(data_t)) slv_if
+// )(Empty) provisos(
+//     Alias#(mst_index_t, Bit#(TLog#(mst_num))),
+//     Bits#(data_t, data_size),
+//     FShow#(data_t)
+// );
 
-    Vector#(mst_num, FIFO#(data_t)) mst_q <- replicateM(mkFIFO);
-    Vector#(slv_num, FIFO#(data_t)) slv_q <- replicateM(mkFIFO);
+//     Vector#(mst_num, FIFO#(data_t)) mst_q <- replicateM(mkFIFO);
+//     Vector#(slv_num, FIFO#(data_t)) slv_q <- replicateM(mkFIFO);
 
-    mkCrossbarBridge(getRoute, mkArb, map(fifoToGet, mst_q), map(fifoToPut, slv_q));
-    return tuple2(map(fifoToPut, mst_q), map(fifoToGet, slv_q));
-endmodule
+//     mkCrossbarBridge(getRoute, mkArb, map(fifoToGet, mst_q), map(fifoToPut, slv_q));
+//     return tuple2(map(fifoToPut, mst_q), map(fifoToGet, slv_q));
+// endmodule
 
 endpackage : CrossBar
