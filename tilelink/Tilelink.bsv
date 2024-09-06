@@ -86,4 +86,52 @@ typedef struct {
     Bit#(sink_width)     sink   ;
 } TLE #(numeric type addr_width, numeric type data_width, numeric type size_width, numeric type source_width, numeric type sink_width) deriving(Bits, Eq, FShow);
 
+interface TilelinkMST#(numeric type addr_width, numeric type data_width, numeric type size_width, numeric type source_width, numeric type sink_width);
+    Get#(TLA #(addr_width, data_width, size_width, source_width, sink_width)) tla;
+    Put#(TLB #(addr_width, data_width, size_width, source_width, sink_width)) tlb;
+    Get#(TLC #(addr_width, data_width, size_width, source_width, sink_width)) tlc;
+    Put#(TLD #(addr_width, data_width, size_width, source_width, sink_width)) tld;
+    Get#(TLE #(addr_width, data_width, size_width, source_width, sink_width)) tle;
+endinterface
+
+interface TilelinkSLV#(numeric type addr_width, numeric type data_width, numeric type size_width, numeric type source_width, numeric type sink_width);
+    Put#(TLA #(addr_width, data_width, size_width, source_width, sink_width)) tla;
+    Get#(TLB #(addr_width, data_width, size_width, source_width, sink_width)) tlb;
+    Put#(TLC #(addr_width, data_width, size_width, source_width, sink_width)) tlc;
+    Get#(TLD #(addr_width, data_width, size_width, source_width, sink_width)) tld;
+    Put#(TLE #(addr_width, data_width, size_width, source_width, sink_width)) tle;
+endinterface
+
+instance Connectable#(TilelinkMST#(addr_width, data_width, size_width, source_width, sink_width), TilelinkSLV#(addr_width, data_width, size_width, source_width, sink_width));
+    module mkConnection#(
+        TilelinkMST#(addr_width, data_width, size_width, source_width, sink_width) mst,
+        TilelinkSLV#(addr_width, data_width, size_width, source_width, sink_width) slv
+    )(Empty);
+        rule tilelink_a_channel;
+            slv.tla.put(mst.tla.get);
+        endrule
+        rule tilelink_c_channel;
+            slv.tlc.put(mst.tlc.get);
+        endrule
+        rule tilelink_e_channel;
+            slv.tle.put(mst.tle.get);
+        endrule
+        rule tilelink_b_channel;
+            mst.tlb.put(slv.tlb.get);
+        endrule
+        rule tilelink_d_channel;
+            mst.tld.put(slv.tld.get);
+        endrule
+    endmodule
+endinstance
+
+instance Connectable#(TilelinkSLV#(addr_width, data_width, size_width, source_width, sink_width), TilelinkMST#(addr_width, data_width, size_width, source_width, sink_width));
+    module mkConnection#(
+        TilelinkSLV#(addr_width, data_width, size_width, source_width, sink_width) slv,
+        TilelinkMST#(addr_width, data_width, size_width, source_width, sink_width) mst
+    )(Empty);
+        mkConnection(mst, slv);
+    endmodule
+endinstance
+
 endpackage : Tilelink
