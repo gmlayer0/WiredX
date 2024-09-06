@@ -6,8 +6,9 @@ import Vector::*;
 import GetPut::*;
 import CrossBar::*;
 import LFSR::*;
+import LCGR::*;
 
-typedef 7 NUM_MASTER;
+typedef 5 NUM_MASTER;
 typedef 4 NUM_SLAVE;
 
 module mkMyArb(Arbiter_IFC#(NUM_MASTER));
@@ -48,10 +49,13 @@ module mkTB();
     match {.mst, .slv} = intf;
 
     for(Integer i = 0 ; i < valueOf(NUM_MASTER) ; i = i + 1) begin
-        rule gen_random_request;
-            Bit#(32) lfsrValue = pack(iter * 31 * (fromInteger(i) * 5));
+        Reg#(Bit#(32)) rndValue <- mkReg(pack(lcg(fromInteger(i))));
+        rule upd_rndValue;
+            rndValue <= pack(lcg(unpack(rndValue)));
+        endrule
+        rule gen_random_request(iter < 15);
             Bit#(4) myIndex = fromInteger(i);
-            Bit#(8) myValue = {myIndex, lfsrValue[3:0]};
+            Bit#(8) myValue = {myIndex, rndValue[5:2]};
             Bit#(2) index = myValue[1:0];
             mst[i].put(myValue);
             $display("%03d::MST%01d: %h, Requesting SLV%d", iter ,i ,myValue , index);

@@ -1,6 +1,8 @@
 package Tilelink
 
 // A Channel definations
+import Connectable::*;
+import GetPut::*;
 
 typedef enum {
     PutFullData    = 3'h0,

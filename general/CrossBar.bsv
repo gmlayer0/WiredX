@@ -4,6 +4,7 @@ import Vector::*;
 import GetPut::*;
 import Arbiter::*;
 import FIFO::*;
+import Connectable::*;
 
 // Build a crossbar between multiple master and slave.
 // Routing Policy and Arbiter Policy is flexable.
@@ -110,22 +111,22 @@ module mkCrossbarIntf#(
 
 endmodule
 
-// module mkCrossbarBridge #(
-//     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-//     module #(Arbiter_IFC#(mst_num)) mkArb,
-//     Vector#(mst_num, Get#(data_t)) mst_if,
-//     Vector#(slv_num, Put#(data_t)) slv_if
-// )(Empty) provisos(
-//     Alias#(mst_index_t, Bit#(TLog#(mst_num))),
-//     Bits#(data_t, data_size),
-//     FShow#(data_t)
-// );
+module mkCrossbarConnect #(
+    function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
+    module #(Arbiter_IFC#(mst_num)) mkArb,
+    Vector#(mst_num, Get#(data_t)) mst_if,
+    Vector#(slv_num, Put#(data_t)) slv_if
+)(Empty) provisos(
+    Alias#(mst_index_t, Bit#(TLog#(mst_num))),
+    Bits#(data_t, data_size),
+    FShow#(data_t)
+);
 
-//     Vector#(mst_num, FIFO#(data_t)) mst_q <- replicateM(mkFIFO);
-//     Vector#(slv_num, FIFO#(data_t)) slv_q <- replicateM(mkFIFO);
+    Tuple2#(Vector#(mst_num, Put#(data_t)),Vector#(slv_num, Get#(data_t))) intf <- mkCrossbarIntf(getRoute, mkArb);
+    match {.mst, .slv} = intf;
+    for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1) mkConnection(mst[m], mst_if[m]);
+    for(Integer s = 0 ; s < valueOf(slv_num) ; s = s + 1) mkConnection(slv[s], slv_if[s]);
 
-//     mkCrossbarBridge(getRoute, mkArb, map(fifoToGet, mst_q), map(fifoToPut, slv_q));
-//     return tuple2(map(fifoToPut, mst_q), map(fifoToGet, slv_q));
-// endmodule
+endmodule
 
 endpackage : CrossBar
