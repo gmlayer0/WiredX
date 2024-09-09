@@ -1,6 +1,6 @@
 package CrossBarTB;
 
-import Arbiter::*;
+import XArbiter::*;
 import FIFO::*;
 import Vector::*;
 import GetPut::*;
@@ -11,8 +11,8 @@ import LCGR::*;
 typedef 5 NUM_MASTER;
 typedef 4 NUM_SLAVE;
 
-module mkMyArb(Arbiter_IFC#(NUM_MASTER));
-    Arbiter_IFC#(NUM_MASTER) arb <- mkArbiter(False);
+module mkMyArb(XArbiter#(NUM_MASTER, Bit#(8)));
+    XArbiter#(NUM_MASTER, Bit#(8)) arb <- mkXArbiter(False);
     return arb;
 endmodule
 

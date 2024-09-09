@@ -2,7 +2,7 @@ package CrossBar;
 
 import Vector::*;
 import GetPut::*;
-import Arbiter::*;
+import XArbiter::*;
 import FIFO::*;
 import Connectable::*;
 
@@ -12,7 +12,7 @@ import Connectable::*;
 // Latency is fixed for now.
 module mkCrossbarIntf#(
     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-    module #(Arbiter_IFC#(mst_num)) mkArb
+    module #(XArbiter#(mst_num, data_t)) mkArb
 )(
     Tuple2#(Vector#(mst_num, Put#(data_t)), Vector#(slv_num, Get#(data_t)))
 ) provisos(
@@ -29,7 +29,7 @@ module mkCrossbarIntf#(
     Reg#(data_t) mst_slv_payload[valueOf(mst_num)][2];
 
     // For each slave, Create a Arbiter.
-    Arbiter_IFC#(mst_num) arb[valueOf(slv_num)];
+    XArbiter#(mst_num, data_t) arb[valueOf(slv_num)];
     Vector#(slv_num, Wire#(Bit#(mst_num))) slv_grant <- replicateM(mkDWire(0));
 
     for(Integer m = 0 ; m < valueOf(mst_num) ; m = m + 1) begin
@@ -77,7 +77,7 @@ module mkCrossbarIntf#(
                 slv_tmp[0] matches tagged Invalid &&&
                 mst_slv_dec[m][1] matches tagged Valid .vec
             );
-                if(unpack(vec[s])) arb[s].clients[m].request();
+                if(unpack(vec[s])) arb[s].clients[m].request(mst_slv_payload[m][1]);
             endrule
         end
         
@@ -113,7 +113,7 @@ endmodule
 
 module mkCrossbarConnect #(
     function Bit#(slv_num) getRoute(mst_index_t mst, data_t payload),
-    module #(Arbiter_IFC#(mst_num)) mkArb,
+    module #(XArbiter#(mst_num, data_t)) mkArb,
     Vector#(mst_num, Get#(data_t)) mst_if,
     Vector#(slv_num, Put#(data_t)) slv_if
 )(Empty) provisos(

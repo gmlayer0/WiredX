@@ -1,7 +1,7 @@
 package TilelinkCrossBar;
 
 import Vector::*;
-import Arbiter::*;
+import XArbiter::*;
 import Tilelink::*;
 import CrossBar::*;
 
